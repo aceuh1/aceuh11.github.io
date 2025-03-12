@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>8-bit Bomb Defusal</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+      
+
+  <style>
+   
+    #startGame{
+        padding: 15px;
+        margin:15px
+    }
+    body {
+        font-family: "Pixelify Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+      background: #000;
+      color: #fff;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      grid-gap: 5px;
+      justify-content: center;
+      margin: 20px auto;
+    }
+    .tile {
+      width: 50px;
+      height: 50px;
+      background: #444;
+      border: 2px solid #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tile.revealed {
+      background: #222;
+      border-color: #333;
+    }
+    /* Bomb animation applies only for bombs discovered after the first one */
+    .tile.bomb {
+      background: #f00;
+      animation: explode 0.5s ease-out;
+    }
+    @keyframes explode {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.5); }
+      100% { transform: scale(1); }
+    }
+    .scoreboard {
+      margin-top: 20px;
+    }
+    .scoreboard div {
+      margin: 5px 0;
+    }
+    #setup {
+      margin: 20px auto;
+    }
+    #game {
+      display: none;
+    }
+    input[type="text"] {
+        font-family: "Pixelify Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+      padding: 15px;
+      margin: 25px;
+      font-size: 14px;
+    }
+    .homescreen {
+    background-color: black;
+    border-radius: 15px;
+   padding: 20px;
+}
+.homescreen1 {
+    background-color: rgb(187, 17, 17);
+    border-radius: 15px;
+   padding: 20px;
+   margin-top: 50px;
+}
+a{
+    text-decoration: none;
+    color: white;
+}
+button{
+    font-family: "Pixelify Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+}
+option, select{
+     font-family: "Pixelify Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+}
+  </style>
+</head>
+<body>
+  <h1>8-bit Bomb Defusal</h1>
+
+  <!-- Setup Screen -->
+  <div id="setup">
+    <h2>Setup Game</h2>
+    <label for="playerCount">Number of Players (1-4): </label>
+    <select id="playerCount">
+      <option value="1">1</option>
+      <option value="2" selected>2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+    </select>
+    <div id="playerNames"></div>
+    <button id="startGame">Start Game</button>
+  </div>
+ 
+
+
+  <!-- Game Screen -->
+  <div id="game">
+    <div class="grid" id="grid"></div>
+    <div class="scoreboard" id="scoreboard"></div>
+  </div>
+
+
+  <button class="homescreen1"><a href="index.html" > Reset</a> </button>
+ <br>
+<br><br>
+ <button class="homescreen"><a href="https://aceuh1.github.io/aceuh9.github.io/games.html" > Go back to Homescreen</a> </button>
+ 
+  <!-- Audio element for boom sound -->
+  <audio id="boomSound" preload="auto">
+    <source src="boom.mp3" type="audio/mpeg">
+  </audio>
+
+  <audio id="spyTheme" loop>
+    <source src="spytheme.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+</audio>
+  
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const spyTheme = document.getElementById("spyTheme");
+        const boomSound = document.getElementById("boomSound");
+    
+            // Set spyTheme volume to 50%
+        spyTheme.volume = 0.5;
+       
+
+        // Retrieve saved playback time for spyTheme.mp3
+        const savedTime = localStorage.getItem("spyThemeTime");
+        if (savedTime) {
+            spyTheme.currentTime = parseFloat(savedTime);
+        }
+    
+        // Save playback position periodically
+        spyTheme.addEventListener("timeupdate", function () {
+            localStorage.setItem("spyThemeTime", spyTheme.currentTime);
+        });
+    
+        // Ensure spyTheme resumes from the saved position
+        spyTheme.addEventListener("play", function () {
+            if (savedTime) {
+                spyTheme.currentTime = parseFloat(savedTime);
+            }
+        });
+    
+        // Ensure autoplay works after user interaction
+        document.body.addEventListener("click", () => {
+            spyTheme.play();
+            effectSound.play();
+        }, { once: true });
+    });
+    </script>
+
+  <script>
+    // Game state with a new flag to track bomb discovery
+    const mockGameState = {
+      players: [],
+      grid: [],
+      currentTurn: null,
+      gameStatus: "ongoing",
+      bombTriggered: false, // becomes true once the first bomb is clicked
+    };
+
+    const gridSize = 5;
+    const bombProbability = 0.2; // 20% chance of a bomb
+
+    // Generate Grid
+    function generateGrid() {
+      const grid = [];
+      for (let x = 0; x < gridSize; x++) {
+        for (let y = 0; y < gridSize; y++) {
+          grid.push({
+            x,
+            y,
+            hasBomb: Math.random() < bombProbability,
+            clickedBy: null,
+            // we'll use firstBomb to mark the very first bomb clicked
+            firstBomb: false,
+          });
+        }
+      }
+      mockGameState.grid = grid;
+    }
+
+    // Render Grid
+    function renderGrid() {
+      const gridElement = document.getElementById("grid");
+      gridElement.innerHTML = "";
+      mockGameState.grid.forEach(tile => {
+        const tileElement = document.createElement("div");
+        tileElement.className = "tile";
+        tileElement.dataset.x = tile.x;
+        tileElement.dataset.y = tile.y;
+        if (tile.clickedBy) {
+          tileElement.classList.add("revealed");
+          if (tile.hasBomb) {
+            // Only apply bomb animation if it's not the first bomb clicked.
+            if (!tile.firstBomb) {
+              tileElement.classList.add("bomb");
+            }
+            tileElement.textContent = "💣";
+          }
+        }
+        tileElement.addEventListener("click", handleTileClick);
+        gridElement.appendChild(tileElement);
+      });
+    }
+
+    // Handle Tile Click
+    function handleTileClick(event) {
+      if (mockGameState.gameStatus === "ended") return;
+
+      const x = parseInt(event.target.dataset.x);
+      const y = parseInt(event.target.dataset.y);
+      const playerId = mockGameState.currentTurn;
+      const tile = mockGameState.grid.find(t => t.x === x && t.y === y);
+
+      if (tile && !tile.clickedBy) {
+        tile.clickedBy = playerId;
+        if (tile.hasBomb) {
+          // Check if this is the first bomb clicked
+          if (!mockGameState.bombTriggered) {
+            tile.firstBomb = true;  // First bomb does NOT animate
+            mockGameState.bombTriggered = true;
+          } else {
+            tile.firstBomb = false; // Subsequent bombs animate
+          }
+          const player = mockGameState.players.find(p => p.id === playerId);
+          player.status = "eliminated";
+        }
+        mockGameState.currentTurn = getNextPlayer(playerId);
+        checkGameEnd();
+        renderGrid();
+        renderScoreboard();
+      }
+    }
+
+    // Get Next Player
+    function getNextPlayer(currentPlayerId) {
+      const players = mockGameState.players;
+      let currentIndex = players.findIndex(p => p.id === currentPlayerId);
+      let nextIndex = (currentIndex + 1) % players.length;
+      if (players.length === 1) return currentPlayerId;
+      while (players[nextIndex].status !== "alive") {
+        nextIndex = (nextIndex + 1) % players.length;
+        if (nextIndex === currentIndex) break;
+      }
+      return players[nextIndex].id;
+    }
+
+    // Check Game End
+    function checkGameEnd() {
+      const alivePlayers = mockGameState.players.filter(p => p.status === "alive");
+      if (alivePlayers.length <= 1) {
+        mockGameState.gameStatus = "ended";
+        assignScores();
+        
+        boomSound.volume = 1;
+        // Play the boom sound when game is over
+        document.getElementById("boomSound").play();
+        setTimeout(() => {
+          alert(`Game Over! Winner: ${alivePlayers[0]?.name || "None"}`);
+        }, 100);
+      }
+    }
+
+    // Assign Scores
+    function assignScores() {
+      const eliminatedPlayers = mockGameState.players.filter(p => p.status === "eliminated");
+      const alivePlayers = mockGameState.players.filter(p => p.status === "alive");
+
+      eliminatedPlayers.forEach((player, index) => {
+        player.score = index;
+      });
+
+      const survivalPoints = 5;
+      alivePlayers.forEach(player => {
+        player.score = survivalPoints;
+      });
+
+      if (alivePlayers.length === 1) {
+        alivePlayers[0].score = 10;
+      }
+    }
+
+    // Render Scoreboard
+    function renderScoreboard() {
+      const scoreboardElement = document.getElementById("scoreboard");
+      scoreboardElement.innerHTML = "<h2>Scoreboard</h2>";
+      mockGameState.players.forEach(player => {
+        const playerElement = document.createElement("div");
+        playerElement.textContent = `${player.name}: ${player.score} points (${player.status})`;
+        scoreboardElement.appendChild(playerElement);
+      });
+    }
+
+    // Setup player name inputs based on number of players
+    function setupPlayerInputs() {
+      const playerCountSelect = document.getElementById("playerCount");
+      const playerNamesDiv = document.getElementById("playerNames");
+      const count = parseInt(playerCountSelect.value);
+      playerNamesDiv.innerHTML = "";
+      for (let i = 1; i <= count; i++) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = `Player ${i} Name`;
+        input.id = `player${i}Name`;
+        playerNamesDiv.appendChild(input);
+      }
+    }
+
+    // Start Game
+    document.getElementById("startGame").addEventListener("click", () => {
+      const playerCount = parseInt(document.getElementById("playerCount").value);
+      const players = [];
+      for (let i = 1; i <= playerCount; i++) {
+        const nameInput = document.getElementById(`player${i}Name`);
+        const name = nameInput.value.trim() || `Player ${i}`;
+        players.push({ id: `player${i}`, name: name, status: "alive", score: 0 });
+      }
+      mockGameState.players = players;
+      mockGameState.currentTurn = players[0].id;
+      // Reset bomb flag for new game
+      mockGameState.bombTriggered = false;
+      generateGrid();
+      renderGrid();
+      renderScoreboard();
+      document.getElementById("setup").style.display = "none";
+      document.getElementById("game").style.display = "block";
+    });
+
+    // Update player inputs when player count changes
+    document.getElementById("playerCount").addEventListener("change", setupPlayerInputs);
+
+    // Initialize player inputs on page load
+    setupPlayerInputs();
+  </script>
+</body>
+</html>
